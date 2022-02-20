@@ -1,5 +1,7 @@
+import time
 import uasyncio as asyncio
 import machine
+import network
 
 async def blink():
     led = machine.Pin(2, machine.Pin.OUT, value = 1)
@@ -21,9 +23,39 @@ def readConfig():
     return config
 
 
+def halt():
+    for i in range (5, 0, -1):
+        print("The app will reboot in {} seconds".format(i))
+        time.sleep(1)
+
+    machine.reset()
+
+
+async def connectWiFi(ssid, passwd, timeout=10):
+    sta = network.WLAN(network.STA_IF)
+    sta.active(True)
+
+    print("Connecting to WiFi: " + ssid)
+    sta.connect(ssid, passwd)
+
+    duration = 0
+    while not sta.isconnected():
+        if duration >= timeout:
+            print('WiFi connection failed.')
+            halt()
+
+        print("Still connecting...")
+        duration += 1
+        await asyncio.sleep(1)
+
+    print("Connected to WiFi. ifconfig="+str(sta.ifconfig()))
+
+
 async def main():
     config = readConfig()
     print("Configuration: " + str(config))
+
+    await connectWiFi(config['ssid'], config['wifi_pw'])
 
     asyncio.create_task(blink())
 
