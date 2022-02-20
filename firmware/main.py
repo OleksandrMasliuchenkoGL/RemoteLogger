@@ -3,6 +3,31 @@ import uasyncio as asyncio
 import machine
 import network
 
+
+class RemoteLogger():
+    def __init__(self):
+        self.writer = None
+
+
+    async def connect(self, server, port):
+        print("Openning connection to " + server + ":" + str(port)) 
+        _, self.writer = await asyncio.open_connection(server, int(port))
+
+
+    async def log(self, msg):
+        # TODO: Print only if main UART is used
+        print(msg)
+
+        try:
+            self.writer.write(msg.encode())
+            await self.writer.drain()
+        except Exception as e:
+            halt("Unable to send a message to log server: " + str(e))
+
+
+logger = RemoteLogger()
+
+
 fastBlinking=True
 async def blink():
     led = machine.Pin(2, machine.Pin.OUT, value = 1)
@@ -24,7 +49,8 @@ def readConfig():
     return config
 
 
-def halt():
+def halt(err):
+    print("Fatal error: " + err)
     for i in range (5, 0, -1):
         print("The app will reboot in {} seconds".format(i))
         time.sleep(1)
@@ -44,8 +70,7 @@ async def connectWiFi(ssid, passwd, timeout=10):
     duration = 0
     while not sta.isconnected():
         if duration >= timeout:
-            print("WiFi connection failed. Status=" + str(sta.status()))
-            halt()
+            halt("WiFi connection failed. Status=" + str(sta.status()))
 
         print("Still connecting... Status=" + str(sta.status()))
         duration += 1
@@ -56,15 +81,18 @@ async def connectWiFi(ssid, passwd, timeout=10):
 
 
 async def main():
+    global logger
+
     config = readConfig()
     print("Configuration: " + str(config))
 
     asyncio.create_task(blink())
 
     await connectWiFi(config['ssid'], config['wifi_pw'])
-
+    await logger.connect(config['server'], config['port'])
 
     while True:
+        await logger.log("Test")
         await asyncio.sleep(5)
 
 
