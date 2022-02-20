@@ -3,12 +3,13 @@ import uasyncio as asyncio
 import machine
 import network
 
+fastBlinking=True
 async def blink():
     led = machine.Pin(2, machine.Pin.OUT, value = 1)
 
     while True:
         led(not led()) # Fast blinking if no connection
-        await asyncio.sleep_ms(1000)
+        await asyncio.sleep_ms(1000 if not fastBlinking else 150)
 
 def readConfig():
     print("Reading configuration...") 
@@ -32,6 +33,8 @@ def halt():
 
 
 async def connectWiFi(ssid, passwd, timeout=10):
+    global fastBlinking
+
     sta = network.WLAN(network.STA_IF)
     sta.active(True)
 
@@ -49,6 +52,7 @@ async def connectWiFi(ssid, passwd, timeout=10):
         await asyncio.sleep(1)
 
     print("Connected to WiFi. ifconfig="+str(sta.ifconfig()))
+    fastBlinking = False
 
 
 async def main():
