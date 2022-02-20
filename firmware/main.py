@@ -41,10 +41,10 @@ async def connectWiFi(ssid, passwd, timeout=10):
     duration = 0
     while not sta.isconnected():
         if duration >= timeout:
-            print('WiFi connection failed.')
+            print("WiFi connection failed. Status=" + str(sta.status()))
             halt()
 
-        print("Still connecting...")
+        print("Still connecting... Status=" + str(sta.status()))
         duration += 1
         await asyncio.sleep(1)
 
@@ -55,9 +55,10 @@ async def main():
     config = readConfig()
     print("Configuration: " + str(config))
 
+    asyncio.create_task(blink())
+
     await connectWiFi(config['ssid'], config['wifi_pw'])
 
-    asyncio.create_task(blink())
 
     while True:
         await asyncio.sleep(5)
