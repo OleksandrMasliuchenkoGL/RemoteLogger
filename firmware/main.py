@@ -3,6 +3,7 @@ import uasyncio as asyncio
 import machine
 import network
 import webrepl
+import uos
 
 class RemoteLogger():
     def __init__(self):
@@ -51,6 +52,9 @@ def readConfig():
 
 
 def halt(err):
+    print("Swapping back to USB UART")
+    uos.dupterm(machine.UART(0, 115200), 1)
+
     print("Fatal error: " + err)
     for i in range (5, 0, -1):
         print("The app will reboot in {} seconds".format(i))
@@ -81,6 +85,14 @@ async def connectWiFi(ssid, passwd, timeout=10):
     fastBlinking = False
 
 
+def swapUART():
+    print("Swapping UART to alternate pins. Disconnecting REPL on UART")
+    uos.dupterm(None, 1)
+
+    uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13))
+    return uart
+
+
 async def main():
     config = readConfig()
     print("Configuration: " + str(config))
@@ -90,6 +102,7 @@ async def main():
     await connectWiFi(config['ssid'], config['wifi_pw'])
     await logger.connect(config['server'], config['port'])
     webrepl.start()
+    uart = swapUART()
 
     asyncio.create_task(blink())
 
