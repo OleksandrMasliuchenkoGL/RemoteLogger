@@ -2,7 +2,7 @@ import time
 import uasyncio as asyncio
 import machine
 import network
-
+import webrepl
 
 class RemoteLogger():
     def __init__(self):
@@ -12,6 +12,7 @@ class RemoteLogger():
     async def connect(self, server, port):
         print("Openning connection to " + server + ":" + str(port)) 
         _, self.writer = await asyncio.open_connection(server, int(port))
+        await self.writer.drain()
 
 
     async def log(self, msg):
@@ -81,8 +82,6 @@ async def connectWiFi(ssid, passwd, timeout=10):
 
 
 async def main():
-    global logger
-
     config = readConfig()
     print("Configuration: " + str(config))
 
@@ -90,6 +89,9 @@ async def main():
 
     await connectWiFi(config['ssid'], config['wifi_pw'])
     await logger.connect(config['server'], config['port'])
+    webrepl.start()
+
+    asyncio.create_task(blink())
 
     while True:
         await logger.log("Test")
