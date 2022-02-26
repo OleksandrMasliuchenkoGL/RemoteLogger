@@ -93,6 +93,31 @@ def swapUART():
     return uart
 
 
+async def uart_listener(uart):
+    reader = asyncio.StreamReader(uart)
+    await asyncio.sleep(25)
+
+    data = ""
+    while True:
+        while '\n' not in data and '\r' not in data:
+            print("Awaiting data from UART")
+            s = yield from reader.read(128)
+            print("s = " + ' '.join('{:02x}'.format(x) for x in s))
+
+            data += s.decode()
+            print("Received data from UART: '" + data + "'")
+
+        data = data.replace('\r', '\n')
+        if '\n' in data:
+            message, data = data.split('\n', 1)
+            message += "\n"
+        else:
+            message = data
+
+        print("Uart Listerer: " + message)
+        await logger.log("UART message: " + message)
+
+
 async def main():
     config = readConfig()
     print("Configuration: " + str(config))
@@ -104,7 +129,7 @@ async def main():
     webrepl.start()
     uart = swapUART()
 
-    asyncio.create_task(blink())
+    asyncio.create_task(uart_listener(uart))
 
     while True:
         await logger.log("Test")
