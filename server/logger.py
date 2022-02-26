@@ -5,10 +5,15 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle(self):
         print(f"{datetime.now()}: Accepted connection from {self.client_address[0]}")
 
+        buf = ""
         while True:
-            self.data = self.request.recv(1024)
-            if not self.data: break
-            print(f"{datetime.now()} {self.client_address[0]}: {self.data.decode('utf-8').strip()}")
+            data = self.request.recv(1024)
+            if not data: break
+
+            buf += data.decode('utf-8')
+            while '\n' in buf:
+                line, buf = buf.split('\n', 1)
+                print(f"{datetime.now()} {self.client_address[0]}: {line}")
 
     def finish(self):
         print(f"{datetime.now()}: Connection from {self.client_address[0]} dropped")
