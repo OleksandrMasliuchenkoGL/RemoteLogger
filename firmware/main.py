@@ -1,4 +1,5 @@
 import time
+
 import uasyncio as asyncio
 import machine
 import network
@@ -21,7 +22,7 @@ class RemoteLogger():
         print(msg)
 
         try:
-            self.writer.write(msg.encode())
+            self.writer.write((msg+'\n').encode())
             await self.writer.drain()
         except Exception as e:
             halt("Unable to send a message to log server: " + str(e))
@@ -89,33 +90,26 @@ def swapUART():
     print("Swapping UART to alternate pins. Disconnecting REPL on UART")
     uos.dupterm(None, 1)
 
-    uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13))
+    uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13), rxbuf=2048)
     return uart
 
 
 async def uart_listener(uart):
     reader = asyncio.StreamReader(uart)
-    await asyncio.sleep(25)
 
+    buf = bytearray(2048)
     data = ""
     while True:
         while '\n' not in data and '\r' not in data:
-            print("Awaiting data from UART")
-            s = yield from reader.read(128)
-            print("s = " + ' '.join('{:02x}'.format(x) for x in s))
+            avail = yield from reader.readinto(buf)
+            data += buf[0:avail].decode()
 
-            data += s.decode()
-            print("Received data from UART: '" + data + "'")
-
+        data = data.replace('\r\n', '\n')
         data = data.replace('\r', '\n')
-        if '\n' in data:
-            message, data = data.split('\n', 1)
-            message += "\n"
-        else:
-            message = data
 
-        print("Uart Listerer: " + message)
-        await logger.log("UART message: " + message)
+        while '\n' in data:
+            message, data = data.split('\n', 1)
+            await logger.log("UART message: " + message)
 
 
 async def main():
