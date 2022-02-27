@@ -97,19 +97,10 @@ def swapUART():
 async def uart_listener(uart):
     reader = asyncio.StreamReader(uart)
 
-    buf = bytearray(2048)
-    data = ""
     while True:
-        while '\n' not in data and '\r' not in data:
-            avail = yield from reader.readinto(buf)
-            data += buf[0:avail].decode()
-
-        data = data.replace('\r\n', '\n')
-        data = data.replace('\r', '\n')
-
-        while '\n' in data:
-            message, data = data.split('\n', 1)
-            await logger.log("UART message: " + message)
+        data = yield from reader.readline()
+        line = data.decode().rstrip()
+        await logger.log("UART message: " + line)
 
 
 async def main():
