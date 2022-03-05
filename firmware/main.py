@@ -159,8 +159,6 @@ def swapUART():
     print("Swapping UART to alternate pins. Disconnecting REPL on UART")
     uos.dupterm(None, 1)
 
-    # uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13), rxbuf=2048)
-    # return uart
 
 @coroutine
 async def uart_listener():
