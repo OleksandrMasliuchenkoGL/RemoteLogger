@@ -85,26 +85,6 @@ class RemoteLogger():
 logger = RemoteLogger()
 
 
-fastBlinking=True
-async def blink():
-    led = machine.Pin(2, machine.Pin.OUT, value = 1)
-
-    while True:
-        led(not led()) # Fast blinking if no connection
-        await asyncio.sleep_ms(1000 if not fastBlinking else 150)
-
-def readConfig():
-    print("Reading configuration...") 
-
-    config = {}
-    with open("config.txt") as config_file:
-        config['ssid'] = config_file.readline().rstrip()
-        config['wifi_pw'] = config_file.readline().rstrip()
-        config['server'] = config_file.readline().rstrip()
-        config['port'] = config_file.readline().rstrip()
-
-    return config
-
 
 def halt(err):
     print("Swapping back to USB UART")
@@ -129,6 +109,28 @@ def coroutine(fn):
             halt(buf.getvalue())
 
     return coroutineWrapper
+
+
+fastBlinking=True
+@coroutine
+async def blink():
+    led = machine.Pin(2, machine.Pin.OUT, value = 1)
+
+    while True:
+        led(not led()) # Fast blinking if no connection
+        await asyncio.sleep_ms(1000 if not fastBlinking else 150)
+
+def readConfig():
+    print("Reading configuration...") 
+
+    config = {}
+    with open("config.txt") as config_file:
+        config['ssid'] = config_file.readline().rstrip()
+        config['wifi_pw'] = config_file.readline().rstrip()
+        config['server'] = config_file.readline().rstrip()
+        config['port'] = config_file.readline().rstrip()
+
+    return config
 
 
 async def connectWiFi(ssid, passwd, timeout=10):
