@@ -6,48 +6,60 @@ import webrepl
 import uos
 
 
-class UartManager:
+def singleton(cls):
+    instance = None
+    def getinstance(*args, **kwargs):
+        nonlocal instance
+        if instance is None:
+            instance = cls(*args, **kwargs)
+            return instance
+        return instance(*args, **kwargs)
+    return getinstance
+
+
+class UartMode:
     USB_UART = 0
     LOGGING_UART = 1
     PROGRAMMING_UART = 2
 
+
+@singleton
+class UartManager:
     UART_CFG = {
-        USB_UART: {'baudrate': 115200},
-        LOGGING_UART: {'baudrate': 115200, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 2048},
-        PROGRAMMING_UART: {'baudrate': 38400, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 256}
+        UartMode.USB_UART: {'baudrate': 115200},
+        UartMode.LOGGING_UART: {'baudrate': 115200, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 2048},
+        UartMode.PROGRAMMING_UART: {'baudrate': 38400, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 256}
     }
 
-    def __init__(self):
+    def __init__(self, mode = None):
         self.mutex = asyncio.Lock()
         self.mode = None
-        self.uart = self.getUart(UartManager.USB_UART)
+        self.switchUart(mode)
 
-    async def acquire(self):
-        await self.mutex.acquire()
 
-    def release(self):
-        self.mutex.release()
+    def __call__(self, mode):
+        self.switchUart(mode)
+        return self
 
-    def getUart(self, mode):
+
+    def switchUart(self, mode):
         if self.mode != mode:
-            cfg = UartManager.UART_CFG[mode]
+            cfg = self.UART_CFG[mode]
             self.uart = machine.UART(0, **cfg)
             self.mode = mode
 
+
+    def getUart(self):
         return self.uart
 
-uart_manager = UartManager()
-
-class ScopedUart:
-    def __init__(self, mode):
-        self.mode = mode
 
     async def __aenter__(self):
-        await uart_manager.acquire()
-        return uart_manager.getUart(self.mode)
+        await self.mutex.acquire()
+        return self.getUart()
+
 
     async def __aexit__(self, *args):
-        uart_manager.release()
+        self.mutex.release()
 
 
 class RemoteLogger():
@@ -98,7 +110,7 @@ def readConfig():
 
 def halt(err):
     print("Swapping back to USB UART")
-    uart = uart_manager.getUart(UartManager.USB_UART)
+    uart = UartManager(UartMode.USB_UART).getUart()
     uos.dupterm(uart, 1)
 
     print("Fatal error: " + err)
@@ -145,7 +157,7 @@ async def uart_listener():
         await asyncio.sleep(1)
 
     while True:
-        async with ScopedUart(UartManager.LOGGING_UART) as uart:
+        async with UartManager(UartMode.LOGGING_UART) as uart:
             reader = asyncio.StreamReader(uart)
             data = yield from reader.readline()
             line = data.decode().rstrip()
