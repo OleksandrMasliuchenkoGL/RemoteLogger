@@ -189,8 +189,11 @@ async def main():
 
     i = 0
     while True:
-        await logger.log("Test " + str(i))
-        i += 1
+        gc.collect()  # For RAM stats.
+        mem_free = gc.mem_free()
+        mem_alloc = gc.mem_alloc()
+
+        await logger.log("Memory allocated: " + str(mem_alloc) + " Free memory: " + str(mem_free))
         await asyncio.sleep(5)
 
 
