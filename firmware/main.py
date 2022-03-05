@@ -1,10 +1,54 @@
 import time
-
 import uasyncio as asyncio
 import machine
 import network
 import webrepl
 import uos
+
+
+class UartManager:
+    USB_UART = 0
+    LOGGING_UART = 1
+    PROGRAMMING_UART = 2
+
+    UART_CFG = {
+        USB_UART: {'baudrate': 115200},
+        LOGGING_UART: {'baudrate': 115200, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 2048},
+        PROGRAMMING_UART: {'baudrate': 38400, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 256}
+    }
+
+    def __init__(self):
+        self.mutex = asyncio.Lock()
+        self.mode = None
+        self.uart = self.getUart(UartManager.USB_UART)
+
+    async def acquire(self):
+        await self.mutex.acquire()
+
+    def release(self):
+        self.mutex.release()
+
+    def getUart(self, mode):
+        if self.mode != mode:
+            cfg = UartManager.UART_CFG[mode]
+            self.uart = machine.UART(0, **cfg)
+            self.mode = mode
+
+        return self.uart
+
+uart_manager = UartManager()
+
+class ScopedUart:
+    def __init__(self, mode):
+        self.mode = mode
+
+    async def __aenter__(self):
+        await uart_manager.acquire()
+        return uart_manager.getUart(self.mode)
+
+    async def __aexit__(self, *args):
+        uart_manager.release()
+
 
 class RemoteLogger():
     def __init__(self):
@@ -54,7 +98,8 @@ def readConfig():
 
 def halt(err):
     print("Swapping back to USB UART")
-    uos.dupterm(machine.UART(0, 115200), 1)
+    uart = uart_manager.getUart(UartManager.USB_UART)
+    uos.dupterm(uart, 1)
 
     print("Fatal error: " + err)
     for i in range (5, 0, -1):
@@ -90,17 +135,21 @@ def swapUART():
     print("Swapping UART to alternate pins. Disconnecting REPL on UART")
     uos.dupterm(None, 1)
 
-    uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13), rxbuf=2048)
-    return uart
+    # uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13), rxbuf=2048)
+    # return uart
 
 
-async def uart_listener(uart):
-    reader = asyncio.StreamReader(uart)
+async def uart_listener():
+    for i in range(15, 0, -1):
+        await logger.log("Starting UART logging in " + str(i) + " seconds")
+        await asyncio.sleep(1)
 
     while True:
-        data = yield from reader.readline()
-        line = data.decode().rstrip()
-        await logger.log("UART message: " + line)
+        async with ScopedUart(UartManager.LOGGING_UART) as uart:
+            reader = asyncio.StreamReader(uart)
+            data = yield from reader.readline()
+            line = data.decode().rstrip()
+            await logger.log("UART message: " + line)
 
 
 async def main():
@@ -112,12 +161,13 @@ async def main():
     await connectWiFi(config['ssid'], config['wifi_pw'])
     await logger.connect(config['server'], config['port'])
     webrepl.start()
-    uart = swapUART()
+    swapUART()
+    asyncio.create_task(uart_listener())
 
-    asyncio.create_task(uart_listener(uart))
-
+    i = 0
     while True:
-        await logger.log("Test")
+        await logger.log("Test " + str(i))
+        i += 1
         await asyncio.sleep(5)
 
 
