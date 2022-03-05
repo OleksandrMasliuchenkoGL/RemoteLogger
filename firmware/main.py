@@ -1,4 +1,6 @@
 import time
+import uio as io
+import usys as sys
 import uasyncio as asyncio
 import machine
 import network
@@ -74,14 +76,10 @@ class RemoteLogger():
 
 
     async def log(self, msg):
-        # TODO: Print only if main UART is used
         print(msg)
 
-        try:
-            self.writer.write((msg+'\n').encode())
-            await self.writer.drain()
-        except Exception as e:
-            halt("Unable to send a message to log server: " + str(e))
+        self.writer.write((msg+'\n').encode())
+        await self.writer.drain()
 
 
 logger = RemoteLogger()
@@ -121,6 +119,18 @@ def halt(err):
     machine.reset()
 
 
+def coroutine(fn):
+    async def coroutineWrapper():
+        try:
+            await fn()
+        except Exception as e:
+            buf = io.StringIO()
+            sys.print_exception(e, buf)
+            halt(buf.getvalue())
+
+    return coroutineWrapper
+
+
 async def connectWiFi(ssid, passwd, timeout=10):
     global fastBlinking
 
@@ -150,7 +160,7 @@ def swapUART():
     # uart = machine.UART(0, 115200, tx=machine.Pin(15), rx=machine.Pin(13), rxbuf=2048)
     # return uart
 
-
+@coroutine
 async def uart_listener():
     for i in range(15, 0, -1):
         await logger.log("Starting UART logging in " + str(i) + " seconds")
@@ -164,6 +174,7 @@ async def uart_listener():
             await logger.log("UART message: " + line)
 
 
+@coroutine
 async def main():
     config = readConfig()
     print("Configuration: " + str(config))
