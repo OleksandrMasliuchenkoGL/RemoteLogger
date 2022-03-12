@@ -100,9 +100,9 @@ def halt(err):
 
 
 def coroutine(fn):
-    async def coroutineWrapper():
+    async def coroutineWrapper(*args, **kwargs):
         try:
-            await fn()
+            await fn(*args, **kwargs)
         except Exception as e:
             buf = io.StringIO()
             sys.print_exception(e, buf)
@@ -162,16 +162,19 @@ def swapUART():
 
 @coroutine
 async def uart_listener():
-    for i in range(15, 0, -1):
-        await logger.log("Starting UART logging in " + str(i) + " seconds")
-        await asyncio.sleep(1)
-
     while True:
         async with UartManager(UartMode.LOGGING_UART) as uart:
             reader = asyncio.StreamReader(uart)
             data = yield from reader.readline()
             line = data.decode().rstrip()
             await logger.log("UART message: " + line)
+
+
+@coroutine
+async def firmware_server(reader, writer):
+    await logger.log("Firmware client connected: " + str(reader.get_extra_info('peername')))
+    await asyncio.sleep(5)
+    await logger.log("Disconnectinv client: " + str(reader.get_extra_info('peername')))
 
 
 @coroutine
@@ -186,6 +189,11 @@ async def main():
     webrepl.start()
     swapUART()
     asyncio.create_task(uart_listener())
+
+    for i in range(15, 0, -1):
+        await logger.log("Starting firmware server in " + str(i) + " seconds")
+        await asyncio.sleep(1)
+    await asyncio.start_server(firmware_server, "0.0.0.0", 5169)
 
     i = 0
     while True:
