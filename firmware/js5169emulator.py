@@ -35,6 +35,9 @@ def emulateReadRAM(addr, len):
     if addr == 0x01001570:
         print("Reading MAC address - returning 00:11:22:33:44:55:66:77:88")
         return struct.pack("<BBBBBBBB", 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88)
+    if addr == 0x01001500:
+        print("Reading Memory configuration")
+        return struct.pack(">IIII", 0x3f, 0x3f, 0x3f, 0)
     
     print("Attempt to read {} bytes at unknown address {:08x}".format(len, addr))
     return bytes(len)
@@ -59,12 +62,45 @@ def selectFlashType(ser, req):
     sendMessage(ser, 0x2d, resp)
 
 
+def flashErase(ser, req):
+    print("MESSAGE: Flash Erase")
+
+    resp = struct.pack("<B", 0)
+    sendMessage(ser, 0x08, resp)
+
+
+def setReset(ser, req):
+    print("MESSAGE: Set reset")
+
+    resp = struct.pack("<B", 0)
+    sendMessage(ser, 0x15, resp)
+
+
 def changeBaudRate(ser, req):
     br = struct.unpack("<B", req)
     print("MESSAGE: Change baud rate to " + str(br[0]))
 
     resp = struct.pack("<B", 0xff)
     sendMessage(ser, 0x28, resp)
+
+
+def ramWrite(ser, req):
+    addr = struct.unpack("<I", req[0:4])
+    data = req[4:]
+    print("MESSAGE: RAM write at addr={:08x}: ".format(addr[0]) + ' '.join('{:02x}'.format(x) for x in data))
+
+    resp = struct.pack("<B", 0)
+    sendMessage(ser, 0x1e, resp)
+
+
+def flashWrite(ser, req):
+    addr = struct.unpack("<I", req[0:4])
+    data = req[4:]
+    print("MESSAGE: Flash write at addr={:08x}: ".format(addr[0]) + ' '.join('{:02x}'.format(x) for x in data))
+
+    resp = struct.pack("<B", 0)
+    sendMessage(ser, 0x0a, resp)
+
 
 
 def main():
@@ -91,6 +127,14 @@ def main():
             selectFlashType(ser, data[:-1])
         elif msgtype == 0x27:
             changeBaudRate(ser, data[:-1])
+        elif msgtype == 0x07:
+            flashErase(ser, data[:-1])
+        elif msgtype == 0x14:
+            setReset(ser, data[:-1])
+        elif msgtype == 0x1d:
+            ramWrite(ser, data[:-1])
+        elif msgtype == 0x09:
+            flashWrite(ser, data[:-1])
         else:
             print("Unsupported message type: {:02x}".format(msgtype))
 
