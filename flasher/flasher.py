@@ -87,22 +87,49 @@ def reset(ser):
     check(status[0] == 0, "Wrong status on reset device")
 
 
+def flashWrite(ser, addr, chunk):
+    print("Writing flash at addr {:08x}".format(addr))
+    req = struct.pack("<I", addr)
+    req += chunk
+    resp = sendRequest(ser, 0x09, req)
+
+    check(resp[0] == 0, "Wrong status on write flash command")
+
+
+def flashFirmware(ser, firmware):
+    for addr in range(0, len(firmware), 0x80):
+        chunklen = len(firmware) - addr
+        if chunklen > 0x80:
+            chunklen = 0x80
+
+        flashWrite(ser, addr, firmware[addr:addr+chunklen])
+
 def main():
 
+    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Flash NXP JN5169 device")
     parser.add_argument("-p", "--port", required=True, help="Serial port")
     parser.add_argument("-f", "--file", required=True, help="Firmware file to flash")
     args = parser.parse_args()
 
+    # Load a file to flash
+    with open(args.file, "rb") as f:
+        firmware = f.read()
+    check(firmware[0:4] == b'\x0f\x03\x00\x0b', "Incorrect firmware format")
+    firmware = firmware[4:]
+
+    # Open connection
     ser = serial.Serial(args.port, baudrate=38400, timeout=1)
 
+    # Prepare the target device
     getChipId(ser)
     mac = getMAC(ser)
     print("Device MAC address: " + ':'.join('{:02x}'.format(x) for x in mac))
 
+    # Flash the firmware
     setFlashType(ser)
     eraseFlash(ser)
-
+    flashFirmware(ser, firmware)
     reset(ser)
 
 main()
