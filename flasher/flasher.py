@@ -1,5 +1,6 @@
 import serial
 import struct
+import argparse
 
 
 def check(cond, errmsg):
@@ -87,7 +88,13 @@ def reset(ser):
 
 
 def main():
-    ser = serial.Serial('COM5', baudrate=38400, timeout=1)
+
+    parser = argparse.ArgumentParser(description="Flash NXP JN5169 device")
+    parser.add_argument("-p", "--port", required=True, help="Serial port")
+    parser.add_argument("-f", "--file", required=True, help="Firmware file to flash")
+    args = parser.parse_args()
+
+    ser = serial.Serial(args.port, baudrate=38400, timeout=1)
 
     getChipId(ser)
     mac = getMAC(ser)
