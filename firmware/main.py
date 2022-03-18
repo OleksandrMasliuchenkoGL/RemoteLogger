@@ -6,6 +6,7 @@ import machine
 import network
 import webrepl
 import uos
+import struct
 
 
 def singleton(cls):
@@ -30,7 +31,7 @@ class UartManager:
     UART_CFG = {
         UartMode.USB_UART: {'baudrate': 115200},
         UartMode.LOGGING_UART: {'baudrate': 115200, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 2048},
-        UartMode.PROGRAMMING_UART: {'baudrate': 38400, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 256}
+        UartMode.PROGRAMMING_UART: {'baudrate': 38400, 'tx': machine.Pin(15), 'rx': machine.Pin(13), 'rxbuf': 1024, 'timeout': 100}
     }
 
     def __init__(self, mode = None):
@@ -46,6 +47,7 @@ class UartManager:
 
     def switchUart(self, mode):
         if self.mode != mode:
+            print("Switch to UART mode " + str(mode))
             cfg = self.UART_CFG[mode]
             self.uart = machine.UART(0, **cfg)
             self.mode = mode
@@ -170,11 +172,90 @@ async def uart_listener():
             await logger.log("UART message: " + line)
 
 
+
+# def calcCRC(data):
+#     res = 0
+#     for b in data:
+#         res ^= b
+    
+#     return res
+
+# async def parseGetChipIdMessage(s, data):
+#     # respond with JN5169 chip ID
+#     resp = struct.pack('>BBIB', 6, 0x33, 0x0000b686, 5)
+#     await logger.log("Sending response: " + str(resp))
+#     s.write(resp)
+#     # crc = struct.pack("<B", calcCRC(resp))
+#     # await logger.log("Sending CRC: " + str(crc))
+#     # s.write(crc)
+
+
+# async def parseMemReadMessage(s, data):
+#     addr, size = struct.unpack('<IH', data)
+#     await logger.log("Reading addr: " + str(addr) + "  size=" + str(size))
+
+
+#@coroutine
+# async def firmware_server(reader, writer):
+#     await logger.log("Firmware client connected: " + str(reader.get_extra_info('peername')))
+
+    # print("Aquiring UART")
+    # async with UartManager(UartMode.PROGRAMMING_UART) as uart:
+    #     print("UART aquired")
+    #     ur = asyncio.StreamReader(uart)
+
+    #     while True:
+    #         await logger.log("")
+    #         await logger.log("Waiting a message header")
+    #         data = await ur.read(2)
+    #         if not data:
+    #             continue
+
+    #         msglen, msgtype = struct.unpack('BB', data)
+    #         await logger.log("Received message: " + str(msgtype))
+    #         await logger.log("Message length: " + str(msglen))
+
+    #         await logger.log("Waiting the rest of the message")
+    #         data = await ur.read(msglen - 1)
+
+    #         if msgtype == 0x1f:
+    #             await parseMemReadMessage(ur, data)
+    #         elif msgtype == 0x32:
+    #             await parseGetChipIdMessage(ur, data)
+    #         else:
+    #             await logger.log("Unsupported message type: " + str(msgtype))
+
+
+    # await asyncio.sleep(5)
+    # await logger.log("Disconnectinv client: " + str(reader.get_extra_info('peername')))
+
+
 @coroutine
-async def firmware_server(reader, writer):
-    await logger.log("Firmware client connected: " + str(reader.get_extra_info('peername')))
-    await asyncio.sleep(5)
-    await logger.log("Disconnectinv client: " + str(reader.get_extra_info('peername')))
+async def firmware_server(tcpreader, tcpwriter):
+    await logger.log("Firmware client connected: " + str(tcpreader.get_extra_info('peername')))
+
+    print("Aquiring UART")
+    async with UartManager(UartMode.PROGRAMMING_UART) as uart:        
+        print("UART aquired")
+        ur = asyncio.StreamReader(uart)
+
+        buf = bytearray(256)
+        while True:
+            print("Listening TCP")
+            len = await tcpreader.readinto(buf)
+            if buf:
+#                print("TCP->UART: " + ' '.join('{:02x}'.format(buf[i]) for i in range(len)))
+                print("TCP->UART: " + str(len))
+                ur.write(buf[:len])
+                await ur.drain()
+
+            print("Listening UART")
+            len = await ur.readinto(buf)
+            if len:
+                # print("UART->TCP: " + ' '.join('{:02x}'.format(buf[i]) for i in range(len)))
+                print("UART->TCP: " + str(len))
+                tcpwriter.write(buf[:len])
+                await tcpwriter.drain()
 
 
 @coroutine
@@ -188,12 +269,13 @@ async def main():
     await logger.connect(config['server'], config['port'])
     webrepl.start()
     swapUART()
-    asyncio.create_task(uart_listener())
+    #asyncio.create_task(uart_listener())
 
-    for i in range(15, 0, -1):
+    for i in range(10, 0, -1):
         await logger.log("Starting firmware server in " + str(i) + " seconds")
         await asyncio.sleep(1)
     await asyncio.start_server(firmware_server, "0.0.0.0", 5169)
+    #asyncio.create_task(firmware_server())
 
     i = 0
     while True:
