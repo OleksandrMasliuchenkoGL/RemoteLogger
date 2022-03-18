@@ -1,6 +1,18 @@
 import serial
 import struct
 import argparse
+import socket
+
+
+class Uart2SocketWrapper:
+    def __init__(self, sock):
+        self.sock = sock
+
+    def write(self, data):
+        self.sock.sendall(data)
+
+    def read(self, len):
+        return self.sock.recv(len)
 
 
 def check(cond, errmsg):
@@ -108,9 +120,19 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Flash NXP JN5169 device")
-    parser.add_argument("-p", "--port", required=True, help="Serial port")
+    parser.add_argument("-p", "--port", help="Serial port")
+    parser.add_argument("-s", "--server", help="Remote flashing server")
     parser.add_argument("-f", "--file", required=True, help="Firmware file to flash")
     args = parser.parse_args()
+
+    # Validate parameters
+    if not args.port and not args.server:
+        print("Please specify either serial port or remote flashing server")
+        sys.exit(1)
+
+    if args.port and args.server:
+        print("You can use either serial port or remote flashing server")
+        sys.exit(1)
 
     # Load a file to flash
     with open(args.file, "rb") as f:
@@ -118,8 +140,14 @@ def main():
     check(firmware[0:4] == b'\x0f\x03\x00\x0b', "Incorrect firmware format")
     firmware = firmware[4:]
 
+
     # Open connection
-    ser = serial.Serial(args.port, baudrate=38400, timeout=1)
+    if args.port:
+        ser = serial.Serial(args.port, baudrate=38400, timeout=1)
+    if args.server:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((args.server, 5169))
+        ser = Uart2SocketWrapper(sock)
 
     # Prepare the target device
     getChipId(ser)
